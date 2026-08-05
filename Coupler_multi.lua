@@ -145,13 +145,58 @@ if Seat then
 	end)
 end
 
+-- Автоматично очищає pendingCouple, якщо coupler-и роз'їхалися
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		if pendingCouple then
+			local cA = pendingCouple.couplerA
+			local cB = pendingCouple.couplerB
+			if not cA.Parent or not cB.Parent then
+				pendingCouple = nil
+			elseif (cA.Position - cB.Position).Magnitude > 10 then
+				pendingCouple = nil
+				local player = getOccupantPlayer()
+				if player then
+					Couple:FireClient(player, false)
+				end
+			end
+		end
+	end
+end)
+
 -- Гравець натиснув кнопку Couple
 Couple.OnServerEvent:Connect(function(player)
 	-- Тільки водій може з'єднувати вагони
 	if player ~= getOccupantPlayer() then return end
 
 	if pendingCouple then
-		connectCouplers(pendingCouple.couplerA, pendingCouple.couplerB)
+		local cA = pendingCouple.couplerA
+		local cB = pendingCouple.couplerB
+
+		-- Перевіряємо, що обидва coupler-и ще існують
+		if not cA.Parent or not cB.Parent then
+			pendingCouple = nil
+			Couple:FireClient(player, false)
+			return
+		end
+
+		-- Перевіряємо, що coupler-и все ще близько один до одного
+		local distance = (cA.Position - cB.Position).Magnitude
+		if distance > 5 then
+			pendingCouple = nil
+			Couple:FireClient(player, false)
+			return
+		end
+
+		-- Повторно перевіряємо, що хоч один coupler належить потягу
+		if not isPartOfTrain(cA) and not isPartOfTrain(cB) then
+			pendingCouple = nil
+			Couple:FireClient(player, false)
+			return
+		end
+
+		connectCouplers(cA, cB)
 		pendingCouple = nil
 		Couple:FireClient(player, false)
 		UnCouple:FireClient(player, true)
