@@ -14,7 +14,10 @@ local function getOccupantPlayer()
 	return nil
 end
 
-local function connectCouplers(player)
+local function connectCouplers()
+	
+	local player = getOccupantPlayer()
+	
 	local attach0 = loco:FindFirstChild("CouplerAttachment") or Instance.new("Attachment", loco)
 	attach0.Name = "CouplerAttachment"
 	
@@ -41,13 +44,14 @@ local function connectCouplers(player)
 end
 
 local function touchEvent()
-	local player = getOccupantPlayer()
 	
 	loco.Touched:Once(function(hit)
 
 		print("Hit Detected", hit.Name)
 
 		if hit == car then
+			local player = getOccupantPlayer()
+			
 			Couple:FireClient(player, true)
 			--connectCouplers()
 		end
@@ -71,6 +75,10 @@ Couple.OnServerEvent:Connect(function(player)
 end)
 
 UnCouple.OnServerEvent:Connect(function(player)
+	
 	detachCouplers()
+	
 	UnCouple:FireClient(player, false)
+	
+	touchEvent()
 end)
