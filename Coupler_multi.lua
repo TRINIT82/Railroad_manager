@@ -130,11 +130,22 @@ workspace.DescendantAdded:Connect(function(descendant)
 	end
 end)
 
--- Коли водій сідає в кабіну — показати кнопки, якщо є що з'єднувати/роз'єднувати
+-- Запам'ятовуємо попереднього водія, щоб сховати кнопки коли він встає
+local prevDriver = nil
+
+-- Коли водій сідає або встає з кабіни
 if Seat then
 	Seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+		-- Якщо був попередній водій — ховаємо в нього кнопки
+		if prevDriver then
+			Couple:FireClient(prevDriver, false)
+			UnCouple:FireClient(prevDriver, false)
+			prevDriver = nil
+		end
+
 		local player = getOccupantPlayer()
 		if player then
+			prevDriver = player
 			if pendingCouple then
 				Couple:FireClient(player, true)
 			end
