@@ -104,6 +104,46 @@ local function isValidPair(cA, cB, maxDist)
 	
 end
 
+--[ZONE DETECTION - FOR UNCOUPLE BUTTON]--]--
+local function setupUncoupleZone(coupler, connectionData)
+	-- Touched/зона навколо coupler'а, показує кнопку коли гравець поруч
+
+	local zone = coupler:FindFirstChild("UncoupleZone") -- частина-тригер біля кюплера
+	if not zone then 
+		return 
+	end
+	
+	local partsInZone = {}
+
+	zone.Touched:Connect(function(hit)
+		
+		print("Zone touched by:", hit:GetFullName())
+		
+		local character = hit.Parent
+		local player = game.Players:GetPlayerFromCharacter(character)
+		
+		if player then
+			partsInZone[player] = (partsInZone[player] or 0) + 1
+			if partsInZone[player] == 1 and findConnection(coupler) then
+				UnCouple:FireClient(player, true, coupler)
+			end
+		end
+	end)
+
+	zone.TouchEnded:Connect(function(hit)
+		local character = hit.Parent
+		local player = game.Players:GetPlayerFromCharacter(character)
+		
+		if player and partsInZone[player] then
+			partsInZone[player] = partsInZone[player] - 1
+			if partsInZone[player] <= 0 then
+				partsInZone[player] = nil
+				UnCouple:FireClient(player, false, coupler)
+			end
+		end
+	end)
+end
+
 --[CREATE CONNECTION]--
 local function connectCouplers(cA, cB)
 	local rod = Instance.new("RodConstraint")
@@ -113,7 +153,12 @@ local function connectCouplers(cA, cB)
 	rod.Length, rod.Thickness, rod.Visible = 5, 0.5, true
 	rod.Parent = cA
 
-	table.insert(connections, { couplerA = cA, couplerB = cB, rod = rod })
+	local connectionData = { couplerA = cA, couplerB = cB, rod = rod }
+	table.insert(connections, connectionData)
+	
+	setupUncoupleZone(cA, connectionData)
+	setupUncoupleZone(cB, connectionData)
+	
 	print("Connected:", cA:GetFullName(), "->", cB:GetFullName())
 end
 
@@ -184,8 +229,11 @@ if Seat then
 		local player = getOccupantPlayer()
 		if player then
 			prevDriver = player
-			if pendingCouple then Couple:FireClient(player, true) end
-			UnCouple:FireClient(player, #connections > 0)
+			if pendingCouple then 
+				Couple:FireClient(player, true) 
+			end
+			
+			--UnCouple:FireClient(player, #connections > 0)
 		end
 	end)
 end
@@ -206,6 +254,15 @@ task.spawn(function()
 	end
 end)
 
+--[IS TRAIN STOPPED ?]--
+local function isTrainStopped()
+	local primaryPart = Chassis and Chassis.PrimaryPart
+	if not primaryPart then return true end -- якщо немає що перевіряти, не блокуємо
+
+	local velocity = primaryPart.AssemblyLinearVelocity
+	return velocity.Magnitude < 1 -- поріг, наприклад 1 stud/сек — можна підкрутити
+end
+
 --[CLIENT REQUEST PROCCESING]--
 
 --[ COUPLE REQUEST]--
@@ -215,7 +272,7 @@ Couple.OnServerEvent:Connect(function(player)
 	local cA, cB = pendingCouple.couplerA, pendingCouple.couplerB
 	if isValidPair(cA, cB, 5) then
 		connectCouplers(cA, cB)
-		UnCouple:FireClient(player, true)
+		--UnCouple:FireClient(player, true)
 	end
 
 	pendingCouple = nil
@@ -223,16 +280,44 @@ Couple.OnServerEvent:Connect(function(player)
 end)
 
 --[ UNCOUPLE REQUEST]--
-UnCouple.OnServerEvent:Connect(function(player)
-	if player ~= getOccupantPlayer() or #connections == 0 then 
+UnCouple.OnServerEvent:Connect(function(player, targetCoupler)
+	print("UnCouple fired by", player.Name, "target:", targetCoupler)
+
+	if not targetCoupler or not isCoupler(targetCoupler) then 
+		print("FAILED: not a valid coupler")
 		return 
 	end
 
-	local conn = table.remove(connections) -- STEK
-	if conn and conn.rod then
-		conn.rod:Destroy()
-		print("Disconnected:", conn.couplerA:GetFullName(), "<-", conn.couplerB:GetFullName())
+	if not isTrainStopped() then 
+		print("FAILED: train not stopped")
+		return 
 	end
 
-	UnCouple:FireClient(player, #connections > 0)
+	local index, conn = findConnection(targetCoupler)
+
+	if not conn then 
+		print("FAILED: no connection found for this coupler")
+		return 
+	end
+
+	conn.rod:Destroy()
+	table.remove(connections, index)
+	print("Disconnected:", conn.couplerA:GetFullName(), "<-", conn.couplerB:GetFullName())
+
+	UnCouple:FireClient(player, false)
 end)
+
+
+--UnCouple.OnServerEvent:Connect(function(player)
+--	if player ~= getOccupantPlayer() or #connections == 0 then 
+--		return 
+--	end
+
+--	local conn = table.remove(connections) -- STEK
+--	if conn and conn.rod then
+--		conn.rod:Destroy()
+--		print("Disconnected:", conn.couplerA:GetFullName(), "<-", conn.couplerB:GetFullName())
+--	end
+
+--	UnCouple:FireClient(player, #connections > 0)
+--end)
