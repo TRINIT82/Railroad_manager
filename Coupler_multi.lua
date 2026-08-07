@@ -2,15 +2,19 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local Couple = ReplicatedStorage:WaitForChild("Couple")
-local UnCouple = ReplicatedStorage:WaitForChild("UnCouple")
-
 local Chassis = Workspace:FindFirstChild("Chassis")
 local Seat = Chassis and Chassis:FindFirstChild("DriverSeat")
+
+local Couple = ReplicatedStorage:WaitForChild("Couple")
+
+local UnCoupleStack = game.ReplicatedStorage:WaitForChild("UnCoupleStack")
+local UnCoupleZone = game.ReplicatedStorage:WaitForChild("UnCoupleZone")
 
 local connections = {}
 local pendingCouple = nil
 local prevDriver = nil
+
+local connect = game.ServerStorage:WaitForChild("Connections")
 
 --[ GET DRIVER ]--
 local function getOccupantPlayer()
@@ -116,16 +120,14 @@ local function setupUncoupleZone(coupler, connectionData)
 	local partsInZone = {}
 
 	zone.Touched:Connect(function(hit)
-		
-		print("Zone touched by:", hit:GetFullName())
-		
+
 		local character = hit.Parent
 		local player = game.Players:GetPlayerFromCharacter(character)
 		
 		if player then
 			partsInZone[player] = (partsInZone[player] or 0) + 1
 			if partsInZone[player] == 1 and findConnection(coupler) then
-				UnCouple:FireClient(player, true, coupler)
+				UnCoupleZone:FireClient(player, true, coupler)
 			end
 		end
 	end)
@@ -138,7 +140,7 @@ local function setupUncoupleZone(coupler, connectionData)
 			partsInZone[player] = partsInZone[player] - 1
 			if partsInZone[player] <= 0 then
 				partsInZone[player] = nil
-				UnCouple:FireClient(player, false, coupler)
+				UnCoupleZone:FireClient(player, false, coupler)
 			end
 		end
 	end)
@@ -150,11 +152,13 @@ local function connectCouplers(cA, cB)
 	
 	rod.Name = "CouplerWeld_" .. (#connections + 1)
 	rod.Attachment0, rod.Attachment1 = getAttachment(cA), getAttachment(cB)
-	rod.Length, rod.Thickness, rod.Visible = 5, 0.5, true
+	rod.Length, rod.Thickness, rod.Visible = 3, 0.5, true
 	rod.Parent = cA
 
 	local connectionData = { couplerA = cA, couplerB = cB, rod = rod }
 	table.insert(connections, connectionData)
+	
+	connect:Fire(cB)
 	
 	setupUncoupleZone(cA, connectionData)
 	setupUncoupleZone(cB, connectionData)
@@ -221,7 +225,7 @@ if Seat then
 		--[HIDE UI FOR PREVIOUS DRIVER]--
 		if prevDriver then
 			Couple:FireClient(prevDriver, false)
-			UnCouple:FireClient(prevDriver, false)
+			UnCoupleStack:FireClient(prevDriver, false)
 			prevDriver = nil
 		end
 		
@@ -233,7 +237,7 @@ if Seat then
 				Couple:FireClient(player, true) 
 			end
 			
-			--UnCouple:FireClient(player, #connections > 0)
+			UnCoupleStack:FireClient(player, #connections > 0)
 		end
 	end)
 end
@@ -249,7 +253,10 @@ task.spawn(function()
 			
 			local player = getOccupantPlayer()
 			
-			if player then Couple:FireClient(player, false) end
+			if player then 
+				Couple:FireClient(player, false) 
+				
+			end
 		end
 	end
 end)
@@ -272,52 +279,29 @@ Couple.OnServerEvent:Connect(function(player)
 	local cA, cB = pendingCouple.couplerA, pendingCouple.couplerB
 	if isValidPair(cA, cB, 5) then
 		connectCouplers(cA, cB)
-		--UnCouple:FireClient(player, true)
+		UnCoupleStack:FireClient(player, true)
 	end
 
 	pendingCouple = nil
 	Couple:FireClient(player, false)
 end)
 
---[ UNCOUPLE REQUEST]--
-UnCouple.OnServerEvent:Connect(function(player, targetCoupler)
-	print("UnCouple fired by", player.Name, "target:", targetCoupler)
+--[ UNCOUPLE REQUEST ]--
+UnCoupleStack.OnServerEvent:Connect(function(player)
+	if player ~= getOccupantPlayer() or #connections == 0 then return end
+	local conn = table.remove(connections)
+	if conn and conn.rod then conn.rod:Destroy() end
+	UnCoupleStack:FireClient(player, #connections > 0)
+end)
 
-	if not targetCoupler or not isCoupler(targetCoupler) then 
-		print("FAILED: not a valid coupler")
-		return 
-	end
-
-	if not isTrainStopped() then 
-		print("FAILED: train not stopped")
-		return 
-	end
+UnCoupleZone.OnServerEvent:Connect(function(player, targetCoupler)
+	if not targetCoupler or not isCoupler(targetCoupler) then return end
+	if not isTrainStopped() then return end
 
 	local index, conn = findConnection(targetCoupler)
-
-	if not conn then 
-		print("FAILED: no connection found for this coupler")
-		return 
-	end
+	if not conn then return end
 
 	conn.rod:Destroy()
 	table.remove(connections, index)
-	print("Disconnected:", conn.couplerA:GetFullName(), "<-", conn.couplerB:GetFullName())
-
-	UnCouple:FireClient(player, false)
+	UnCoupleZone:FireClient(player, false, targetCoupler)
 end)
-
-
---UnCouple.OnServerEvent:Connect(function(player)
---	if player ~= getOccupantPlayer() or #connections == 0 then 
---		return 
---	end
-
---	local conn = table.remove(connections) -- STEK
---	if conn and conn.rod then
---		conn.rod:Destroy()
---		print("Disconnected:", conn.couplerA:GetFullName(), "<-", conn.couplerB:GetFullName())
---	end
-
---	UnCouple:FireClient(player, #connections > 0)
---end)
