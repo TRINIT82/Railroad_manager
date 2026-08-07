@@ -32,14 +32,15 @@ connect.Event:Connect(function(data)
 		print("New wagon registered:", wagon.Name)
 	end
 end)
-
 local function getNextEmptyWagon()
 	local partsInZone = workspace:GetPartsInPart(detectZone)
+	local zoneType = detectZone:GetAttribute("LoadType")
 
 	for _, wagon in ipairs(wagons) do
 		local base = wagon:FindFirstChild("Base")
+		local wagonType = wagon:GetAttribute("WagonType")
 
-		if base and table.find(partsInZone, base) then
+		if base and table.find(partsInZone, base) and wagonType == zoneType then
 			local currentLoad = wagon:GetAttribute("CurrentLoad")
 			local maxLoad = wagon:GetAttribute("MaxCapacity")
 
@@ -48,7 +49,7 @@ local function getNextEmptyWagon()
 			end
 		end
 	end
-	
+
 	return nil
 end
 
@@ -87,6 +88,7 @@ local function load(wagon)
 	task.wait(0.3)
 
 	local newItem = item:Clone()
+	
 	newItem.Parent = game.Workspace
 	newItem.CFrame = AnimEnd.CFrame * CFrame.new(0, 10, 0)
 	CollectionService:AddTag(newItem, "WoodInTransit")
@@ -145,7 +147,10 @@ end)
 
 
 Load_event.OnServerEvent:Connect(function(player)
-	if isLoadingProcess then return end
+	if isLoadingProcess then 
+		return 
+	end
+	
 	isLoadingProcess = true
 
 	Load_event:FireClient(player, false)
@@ -159,6 +164,7 @@ Load_event.OnServerEvent:Connect(function(player)
 		end
 
 		local success = load(targetWagon)
+		
 		if not success then
 			break
 		end
@@ -169,6 +175,7 @@ Load_event.OnServerEvent:Connect(function(player)
 	isLoadingProcess = false
 
 	local remaining = getNextEmptyWagon()
+	
 	if remaining and getOccupantPlayer() == player then
 		Load_event:FireClient(player, true)
 	else
