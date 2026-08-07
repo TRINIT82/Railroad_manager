@@ -34,21 +34,6 @@ local function findConnection(coupler)
 	end
 end
 
---[GET WAGON TYPE]--
-local function getWagonType(coupler)
-	-- coupler.Parent — це модель вагона (як у твоєму isPartOfTrain)
-	local wagon = coupler.Parent
-	return wagon and wagon:GetAttribute("WagonType")
-end
-
---[GET TRAIN TYPE]--
-local function getTrainType()
-	-- якщо є хоч одне з'єднання - беремо тип першого вагона в ньому
-	if #connections > 0 then
-		return getWagonType(connections[1].couplerA)
-	end
-	return nil -- потяг ще порожній, тип ще не зафіксований
-end
 
 --[PART OF THE TRAIN ?]--
 local function isPartOfTrain(coupler)
@@ -80,32 +65,54 @@ local function getAttachment(part)
 	
 end
 
+--[GET WAGON TYPE]--
+local function getWagonType(coupler)
+	-- coupler.Parent — це модель вагона (як у твоєму isPartOfTrain)
+	local wagon = coupler.Parent
+	
+	return wagon and wagon:GetAttribute("WagonType")
+end
+
+
+--[BAN LIST]--
+local forbiddenPairs = {
+	["wood-fuel"] = true,
+	["fuel-wood"] = true,
+	--["cargo-wood"] = true,
+	--["wood-cargo"] = true
+	-- додаси інші заборонені пари сюди
+}
+
+local function isForbiddenCombo(typeA, typeB)
+	if not typeA or not typeB then 
+		return false 
+	end
+	
+	return forbiddenPairs[typeA .. "-" .. typeB] == true
+end
+
 --[CHECK VALID DISTANCE FOR COUPLER]--
 local function isValidPair(cA, cB, maxDist)
 	if not (cA and cB and cA.Parent and cB.Parent) then 
 		return false 
 	end
-	
+
 	if maxDist and (cA.Position - cB.Position).Magnitude > maxDist then 
 		return false 
 	end
-	
-	--return isPartOfTrain(cA) or isPartOfTrain(cB)
-	
-	if not (isPartOfTrain(cA) or isPartOfTrain(cB)) then 
-		return false 
+
+	if not (isPartOfTrain(cA) or isPartOfTrain(cB)) then
+		return false
 	end
-	
-	local trainType = getTrainType()
-	if trainType then
-		local newWagonType = getWagonType(isPartOfTrain(cA) and cB or cA)
-		if newWagonType ~= trainType then
-			return false
-		end
+
+	local typeA = getWagonType(cA)
+	local typeB = getWagonType(cB)
+
+	if isForbiddenCombo(typeA, typeB) then
+		return false
 	end
-	
+
 	return true
-	
 end
 
 --[ZONE DETECTION - FOR UNCOUPLE BUTTON]--]--
@@ -148,17 +155,24 @@ end
 
 --[CREATE CONNECTION]--
 local function connectCouplers(cA, cB)
+	
+	local newCoupler = cB
+	if isPartOfTrain(cB) then
+		newCoupler = cA
+	end
+	
 	local rod = Instance.new("RodConstraint")
 	
 	rod.Name = "CouplerWeld_" .. (#connections + 1)
 	rod.Attachment0, rod.Attachment1 = getAttachment(cA), getAttachment(cB)
-	rod.Length, rod.Thickness, rod.Visible = 3, 0.5, true
+	rod.Length, rod.Thickness, rod.Visible = 5, 0.5, true
 	rod.Parent = cA
 
 	local connectionData = { couplerA = cA, couplerB = cB, rod = rod }
 	table.insert(connections, connectionData)
 	
-	connect:Fire(cB)
+	connect:Fire(newCoupler)
+	print("Connection Fired for NEW wagon:", newCoupler.Parent.Name)
 	
 	setupUncoupleZone(cA, connectionData)
 	setupUncoupleZone(cB, connectionData)
