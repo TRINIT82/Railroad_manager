@@ -10,6 +10,9 @@ local Couple = ReplicatedStorage:WaitForChild("Couple")
 local UnCoupleStack = game.ReplicatedStorage:WaitForChild("UnCoupleStack")
 local UnCoupleZone = game.ReplicatedStorage:WaitForChild("UnCoupleZone")
 
+--[MODULES]--
+local WagonUtils = require(game.ReplicatedStorage:WaitForChild("WagonUtils"))
+
 local connections = {}
 local pendingCouple = nil
 local prevDriver = nil
@@ -34,23 +37,6 @@ local function findConnection(coupler)
 	end
 end
 
-
---[PART OF THE TRAIN ?]--
-local function isPartOfTrain(coupler)
-	if Chassis and coupler.Parent == Chassis then 
-		return true 
-	end
-	
-	for _, conn in ipairs(connections) do
-		if conn.couplerA.Parent == coupler.Parent or conn.couplerB.Parent == coupler.Parent then
-			return true
-		end
-	end
-	
-	return false
-	
-end
-
 --[CREATE/FIND ATTACHMENTS]--
 local function getAttachment(part)
 	local attach = part:FindFirstChild("CouplerAttachment")
@@ -64,15 +50,6 @@ local function getAttachment(part)
 	return attach
 	
 end
-
---[GET WAGON TYPE]--
-local function getWagonType(coupler)
-	-- coupler.Parent — це модель вагона (як у твоєму isPartOfTrain)
-	local wagon = coupler.Parent
-	
-	return wagon and wagon:GetAttribute("WagonType")
-end
-
 
 --[BAN LIST]--
 local forbiddenPairs = {
@@ -101,12 +78,14 @@ local function isValidPair(cA, cB, maxDist)
 		return false 
 	end
 
-	if not (isPartOfTrain(cA) or isPartOfTrain(cB)) then
+	if not (WagonUtils.isPartOfTrain(cA, Chassis, connections) 
+		or WagonUtils.isPartOfTrain(cB, Chassis, connections)) then
+		
 		return false
 	end
 
-	local typeA = getWagonType(cA)
-	local typeB = getWagonType(cB)
+	local typeA = WagonUtils.getWagonType(cA)
+	local typeB = WagonUtils.getWagonType(cB)
 
 	if isForbiddenCombo(typeA, typeB) then
 		return false
@@ -157,7 +136,7 @@ end
 local function connectCouplers(cA, cB)
 	
 	local newCoupler = cB
-	if isPartOfTrain(cB) then
+	if WagonUtils.isPartOfTrain(cB, Chassis, connections) then
 		newCoupler = cA
 	end
 	
