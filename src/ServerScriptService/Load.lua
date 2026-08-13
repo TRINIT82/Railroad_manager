@@ -2,8 +2,10 @@
 local detectZone = game.Workspace:WaitForChild("LoadZone")
 local CollectionService = game:GetService("CollectionService")
 local Load_event = game.ReplicatedStorage.Load_Event
-local Driver = require(game.ReplicatedStorage:WaitForChild("PlayerUtils"))
-local WagonUtils = require(game.ReplicatedStorage:WaitForChild("WagonUtils"))
+local PlayerUtils = require(game.ReplicatedStorage.Modules:WaitForChild("PlayerUtils"))
+local WagonUtils = require(game.ReplicatedStorage.Modules:WaitForChild("WagonUtils"))
+
+local buttonState = {}
 
 --[ITEM]--
 local item = game.ServerStorage:WaitForChild("planks")
@@ -27,6 +29,12 @@ connect.Event:Connect(function(data)
 		table.insert(wagons, wagon)
 		print("New wagon registered:", wagon.Name)
 	end
+end)
+
+
+
+Players.PlayerRemoving:Connect(function(player)
+	buttonState[player] = nil
 end)
 
 local function spawnWood()
@@ -119,14 +127,28 @@ detectZone.Touched:Connect(function(hit)
 
 	for _, wagon in ipairs(wagons) do
 		if hit == wagon.Base and wagonType == zoneType then
-			local player = Driver.getOccupantPlayer(Seat)
+			local player = PlayerUtils.getOccupantPlayer(Seat)
 			
 			if player and WagonUtils.getNextEmptyWagon(detectZone, wagons) then
-				Load_event:FireClient(player, true)
+				PlayerUtils.setButtonState(Load_event,buttonState,player, true)
 			end
 			
 			break
 		end
+	end
+end)
+
+detectZone.TouchEnded:Connect(function(hit)
+	local wagonType = hit.Parent and hit.Parent:GetAttribute("WagonType")
+	local zoneType = detectZone:GetAttribute("LoadType")
+
+	if wagonType ~= zoneType then 
+		return 
+	end
+
+	local player = PlayerUtils.getOccupantPlayer(Seat)
+	if player then
+		PlayerUtils.setButtonState(Load_event,buttonState,player, false)
 	end
 end)
 
@@ -138,7 +160,7 @@ Load_event.OnServerEvent:Connect(function(player)
 	
 	isLoadingProcess = true
 
-	Load_event:FireClient(player, false)
+	PlayerUtils.setButtonState(Load_event,buttonState,player, false)
 
 	while true do
 		local targetWagon = WagonUtils.getNextEmptyWagon(detectZone, wagons)
@@ -161,10 +183,10 @@ Load_event.OnServerEvent:Connect(function(player)
 
 	local remaining = WagonUtils.getNextEmptyWagon(detectZone, wagons)
 	
-	if remaining and Driver.getOccupantPlayer(Seat) == player then
-		Load_event:FireClient(player, true)
+	if remaining and PlayerUtils.getOccupantPlayer(Seat) == player then
+		PlayerUtils.setButtonState(Load_event,buttonState,player, true)
 	else
-		Load_event:FireClient(player, false)
+		PlayerUtils.setButtonState(Load_event,buttonState,player, false)
 	end
 end)
 
