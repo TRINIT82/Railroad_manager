@@ -1,12 +1,11 @@
 --[CONFIG]--
-local detectZone = game.Workspace:WaitForChild("UnLoadZone")
+local detectZone = game.Workspace:WaitForChild("SellZone")
 local CollectionService = game:GetService("CollectionService")
-local UnLoad_event = game.ReplicatedStorage.UnLoad_Event
+local SellEvent = game.ReplicatedStorage.SellEvent
 
 --[ITEM]--
 local item = game.ServerStorage:WaitForChild("planks")
-local spawn_area = game.Workspace:WaitForChild("WoodStorage")
-local visual_wood = game.Workspace.WoodStorage:WaitForChild("Visual_wood")
+local spawn_area = game.Workspace:WaitForChild("SellPlatform")
 
 --[TRAIN]--
 local Chassis = workspace:FindFirstChild("Chassis")
@@ -52,22 +51,6 @@ local function getNextLoadedWagon()
 	return nil
 end
 
-local function spawnWood()
-
-	task.wait(0.5)
-	--[PHYSIC]--
-
-	--local wood = item:Clone()
-	--wood.Parent = game.Workspace
-	--wood:PivotTo(spawn_area.CFrame * CFrame.new(0, 3, 0))
-	--CollectionService:AddTag(wood, "WoodOnPlatform")
-
-	visual_wood.Transparency = 0
-
-	print("New wood spawned on Storage Platform")
-
-end
-
 local OnPlatform = false
 
 local function Unload(wagon)
@@ -80,7 +63,7 @@ local function Unload(wagon)
 	end
 
 	-- local oldWood = CollectionService:GetTagged("WoodOnPlatform")[1]
-	local AnimEnd = game.Workspace:WaitForChild("Wood_Unload")
+	local AnimEnd = spawn_area
 
 	local Visual1 = wagon:FindFirstChild("VisualW1")
 	local Visual2 = wagon:FindFirstChild("VisualW2")
@@ -135,7 +118,6 @@ local function Unload(wagon)
 
 			if not OnPlatform then
 				OnPlatform = true
-				spawnWood()
 			end
 
 		end
@@ -164,7 +146,7 @@ detectZone.Touched:Connect(function(hit)
 			local player = getOccupantPlayer()
 
 			if player and getNextLoadedWagon() then
-				UnLoad_event:FireClient(player, true)
+				SellEvent:FireClient(player, true)
 			end
 
 			break
@@ -173,14 +155,14 @@ detectZone.Touched:Connect(function(hit)
 end)
 
 
-UnLoad_event.OnServerEvent:Connect(function(player)
+SellEvent.OnServerEvent:Connect(function(player)
 	if isLoadingProcess then 
 		return 
 	end
 
 	isLoadingProcess = true
 
-	UnLoad_event:FireClient(player, false)
+	SellEvent:FireClient(player, false)
 
 	while true do
 		local targetWagon = getNextLoadedWagon()
@@ -204,8 +186,8 @@ UnLoad_event.OnServerEvent:Connect(function(player)
 	local remaining = getNextLoadedWagon()
 
 	if remaining and getOccupantPlayer() == player then
-		UnLoad_event:FireClient(player, true)
+		SellEvent:FireClient(player, true)
 	else
-		UnLoad_event:FireClient(player, false)
+		SellEvent:FireClient(player, false)
 	end
 end)
