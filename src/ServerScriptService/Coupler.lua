@@ -11,13 +11,18 @@ local UnCoupleStack = game.ReplicatedStorage:WaitForChild("UnCoupleStack")
 local UnCoupleZone = game.ReplicatedStorage:WaitForChild("UnCoupleZone")
 
 --[MODULES]--
-local WagonUtils = require(game.ReplicatedStorage:WaitForChild("WagonUtils"))
+local WagonUtils = require(game.ReplicatedStorage.Modules:WaitForChild("WagonUtils"))
 
 local connections = {}
 local pendingCouple = nil
 local prevDriver = nil
 
 local connect = game.ServerStorage:WaitForChild("Connections")
+
+--[NETWORK OWNERSHIP]--
+if Chassis and Chassis.PrimaryPart then
+	Chassis.PrimaryPart:SetNetworkOwner(nil)
+end
 
 --[ GET DRIVER ]--
 local function getOccupantPlayer()
@@ -99,14 +104,14 @@ local function setupUncoupleZone(coupler, connectionData)
 	-- Touched/зона навколо coupler'а, показує кнопку коли гравець поруч
 
 	local zone = coupler:FindFirstChild("UncoupleZone") -- частина-тригер біля кюплера
-	if not zone then 
+	if not zone or zone:GetAttribute("ZoneSetup") then 
 		return 
 	end
 	
+	zone:SetAttribute("ZoneSetup", true)
 	local partsInZone = {}
 
 	zone.Touched:Connect(function(hit)
-
 		local character = hit.Parent
 		local player = game.Players:GetPlayerFromCharacter(character)
 		
@@ -166,6 +171,8 @@ local function setupCoupler(coupler)
 	end
 	
 	coupler:SetAttribute("CouplerSetup", true)
+	
+	setupUncoupleZone(coupler)
 
 	coupler.Touched:Connect(function(hit)
 		
@@ -173,13 +180,14 @@ local function setupCoupler(coupler)
 			return 
 		end
 		
+		if (coupler.Position - hit.Position).Magnitude > 8 then
+			return
+		end
+		
 		if findConnection(coupler) or findConnection(hit) then 
 			return 
 		end
 		
-		if not isValidPair(coupler, hit) then 
-			return 
-		end
 
 		local player = getOccupantPlayer()
 		
@@ -195,6 +203,10 @@ local function setupCoupler(coupler)
 				return 
 			end
 		end
+		
+		if not isValidPair(coupler, hit) then 
+			return 
+		end
 
 		pendingCouple = { couplerA = coupler, couplerB = hit }
 		Couple:FireClient(player, true)
@@ -203,7 +215,9 @@ end
 
 --[DOES THEY EXSIST?]--
 for _, item in Workspace:GetDescendants() do
-	if isCoupler(item) then setupCoupler(item) end
+	if isCoupler(item) then 
+		setupCoupler(item) 
+	end
 end
 
 --[REAL TIME CHECKS - FOR NEW COUPLES]--
@@ -231,6 +245,11 @@ if Seat then
 			end
 			
 			UnCoupleStack:FireClient(player, #connections > 0)
+			
+		else
+			prevDriver = nil
+			pendingCouple = nil
+			
 		end
 	end)
 end
