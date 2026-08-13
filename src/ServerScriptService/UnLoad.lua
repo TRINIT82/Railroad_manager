@@ -2,8 +2,10 @@
 local detectZone = game.Workspace:WaitForChild("UnLoadZone")
 local CollectionService = game:GetService("CollectionService")
 local UnLoad_event = game.ReplicatedStorage.UnLoad_Event
-local Driver = require(game.ReplicatedStorage:WaitForChild("PlayerUtils"))
-local WagonUtils = require(game.ReplicatedStorage:WaitForChild("WagonUtils"))
+local PlayerUtils = require(game.ReplicatedStorage.Modules:WaitForChild("PlayerUtils"))
+local WagonUtils = require(game.ReplicatedStorage.Modules:WaitForChild("WagonUtils"))
+
+local buttonState = {}
 
 --[ITEM]--
 local item = game.ServerStorage:WaitForChild("planks")
@@ -94,15 +96,6 @@ local function Unload(wagon)
 		if hit == newItem or hit:IsDescendantOf(newItem) then
 			
 			newItem:Destroy()
-			----[ECONOMY]--
-			--local player = getOccupantPlayer()
-			--local leaderstats = player:FindFirstChild("leaderstats")
-			--local cashStat = leaderstats and leaderstats:FindFirstChild("Cash")
-			
-			--if cashStat then 
-			--	cashStat.Value += 10
-			--	print("Cash Added")
-			--end
 			
 			if connection then 
 				connection:Disconnect() 
@@ -141,10 +134,10 @@ detectZone.Touched:Connect(function(hit)
 
 	for _, wagon in ipairs(wagons) do
 		if hit == wagon.Base and wagonType == zoneType then
-			local player = Driver.getOccupantPlayer(Seat)
+			local player = PlayerUtils.getOccupantPlayer(Seat)
 
 			if player and WagonUtils.getNextLoadedWagon(detectZone, wagons) then
-				UnLoad_event:FireClient(player, true)
+				PlayerUtils.setButtonState(UnLoad_event,buttonState,player, true)
 			end
 
 			break
@@ -152,6 +145,19 @@ detectZone.Touched:Connect(function(hit)
 	end
 end)
 
+detectZone.TouchEnded:Connect(function(hit)
+	local wagonType = hit.Parent and hit.Parent:GetAttribute("WagonType")
+	local zoneType = detectZone:GetAttribute("UnLoadType")
+
+	if wagonType ~= zoneType then 
+		return 
+	end
+
+	local player = PlayerUtils.getOccupantPlayer(Seat)
+	if player then
+		PlayerUtils.setButtonState(UnLoad_event,buttonState,player, false)
+	end
+end)
 
 UnLoad_event.OnServerEvent:Connect(function(player)
 	if isLoadingProcess then 
@@ -160,18 +166,16 @@ UnLoad_event.OnServerEvent:Connect(function(player)
 
 	isLoadingProcess = true
 
-	UnLoad_event:FireClient(player, false)
+	PlayerUtils.setButtonState(UnLoad_event,buttonState,player, false)
 
 	while true do
 		local targetWagon = WagonUtils.getNextLoadedWagon(detectZone, wagons)
-
 		if not targetWagon then
 			print("All wagons are Empty")
 			break
 		end
 
 		local success = Unload(targetWagon)
-
 		if not success then
 			break
 		end
@@ -183,9 +187,9 @@ UnLoad_event.OnServerEvent:Connect(function(player)
 
 	local remaining = WagonUtils.getNextLoadedWagon(detectZone, wagons)
 
-	if remaining and Driver.getOccupantPlayer(Seat) == player then
-		UnLoad_event:FireClient(player, true)
+	if remaining and PlayerUtils.getOccupantPlayer(Seat) == player then
+		PlayerUtils.setButtonState(UnLoad_event,buttonState,player, true)
 	else
-		UnLoad_event:FireClient(player, false)
+		PlayerUtils.setButtonState(UnLoad_event,buttonState,player, false)
 	end
 end)
